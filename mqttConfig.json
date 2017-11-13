@@ -1,0 +1,15 @@
+{
+  "mqttHost": "",
+  "mqttPort": 19001,
+  "mqttLocalHost": "127.0.0.1",
+  "mqttLocalPort": 1883,
+  "clientPrefix": "PBoT-",
+  "TLS": 0,
+  "username": "botpig",
+  "password": "c3fdn1fg",
+  "serviceCode": "1",
+  "reportCycle": 60,
+  "reportTimeout": 300,
+  "reportSaveCycle": 120,
+  "alarmTypes": ["tem", "nre"]
+}
