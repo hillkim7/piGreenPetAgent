@@ -1,7 +1,7 @@
 Green PET MQTT sensor data publisher
 -----------------
-Various sensor data are publishing to MQTT broker.  
-Running platform is Rasberry PI 3 model B with Linux raspberrypi 4.9.41-v7+ #1023 SMP Tue Aug 8 16:00:15 BST 2017 armv7l GNU/Linux.
+Various sensor data are collected and published to MQTT broker.  
+Running platform is Rasberry PI 3 model B with NOOBS.
 
 ![raspberry HW](piGrenPetPrototype1.png)
 
@@ -16,6 +16,13 @@ sudo pip3 install pi-sht1x
 # install MQTT client library
 sudo pip3 install paho-mqtt
 ```
+
+Setup and use external ADC chip
+---------------
+- crowtail - Base shield for Raspberry Pi  
+![crowtail](crowtail-base_shielf_for_pi.png)  
+The original example python code from the shield manufacturer doesn't work.  
+To get ADC value from MPC3008, the SPI read command should be changed.
 
 Program run
 ---------------
