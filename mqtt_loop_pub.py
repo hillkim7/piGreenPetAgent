@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 ## publishing sensor data to MQTT broker
 
 import os
@@ -7,6 +8,7 @@ import sht1x_sensor
 import paho.mqtt.client as mqtt
 import json
 import random
+import spidev
 
 def generate_topic(service_code, product_sn):
     topic = 'petG1/' + service_code + '/' + product_sn + '/stat/_cur'
@@ -15,6 +17,25 @@ def generate_topic(service_code, product_sn):
 def generate_client_id(client_prefix, product_sn):
     client_id = client_prefix + 'GPET' + product_sn + '_' + str(random.randint(100, 999))
     return client_id
+
+CO2_CHANNEL=0
+WATER_LEVEL_CHANNEL=1
+SOIL_HUMIDIFY_CHANNEL=2
+LIGHT_CHANNEL=3
+
+spi = spidev.SpiDev()
+spi.open(0, 0)
+# It must set the speed as 1 M to talk with MCP3008.
+spi.max_speed_hz = 1000000
+
+def read_channel(channel):
+    cmd = 0b11 << 6  # Start bit, single channel read
+    cmd |= (channel & 0x07) << 3  # channel number (in 3 bits)
+    resp = spi.xfer2([cmd, 0x0, 0x0])
+    result = (resp[0] & 0x01) << 9
+    result |= (resp[1] & 0xFF) << 1
+    result |= (resp[2] & 0x80) >> 7
+    return result & 0x3FF
 
 # Data capture and upload interval in seconds.
 INTERVAL=3
@@ -53,18 +74,25 @@ client.loop_start()
 
 try:
     while True:
-        temperature,humidity = sht.read_values()
-        #print(u"Temperature: {:g}\u00b0C, Humidity: {:g}%".format(temperature, humidity))
+        temp,humi = sht.read_values()
+        co2 = read_channel(CO2_CHANNEL)
+        wLev = read_channel(WATER_LEVEL_CHANNEL)
+        sHumi = read_channel(SOIL_HUMIDIFY_CHANNEL)
+        light = read_channel(LIGHT_CHANNEL)
+        #print(u"Temperature: {:g}\u00b0C, Humidity: {:g}%".format(temp, humi))
 
         sensor_data = {
           "tm" : int(time.time()),
-          "temp" : {"unit": "C", "val": temperature},
-          "humi" : {"unit": "%", "val": humidity},
-          "co2" : {"unit": "ppm", "val": random.randint(1000, 2000)}
+          "temp" : {"unit": "C", "val": temp},
+          "humi" : {"unit": "%", "val": humi},
+          "co2" : {"unit": "u10", "val": co2},
+          "wLev" : {"unit": "u10", "val": wLev},
+          "sHumi" : {"unit": "u10", "val": sHumi},
+          "light" : {"unit": "u10", "val": light},
         }
 
         data_in_json_format = json.dumps(sensor_data)
-        print(u"publish: {:s}\u00b0C, Humidity: {:s}%".format(topic, data_in_json_format))
+        print("publish: {:s} {:s}%".format(topic, data_in_json_format))
         client.publish(topic, data_in_json_format, 1)
 
         next_reading += INTERVAL
