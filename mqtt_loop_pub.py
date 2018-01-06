@@ -9,6 +9,7 @@ import paho.mqtt.client as mqtt
 import json
 import random
 import spidev
+import sensor_table
 
 def generate_topic(service_code, product_sn):
     topic = 'petG1/' + service_code + '/' + product_sn + '/stat/_cur'
@@ -18,9 +19,9 @@ def generate_client_id(client_prefix, product_sn):
     client_id = client_prefix + 'GPET' + product_sn + '_' + str(random.randint(100, 999))
     return client_id
 
-CO2_CHANNEL=0
-WATER_LEVEL_CHANNEL=1
-SOIL_HUMIDIFY_CHANNEL=2
+WATER_LEVEL_CHANNEL=0
+SOIL_HUMIDIFY_CHANNEL=1
+CO2_CHANNEL=2
 LIGHT_CHANNEL=3
 
 spi = spidev.SpiDev()
@@ -70,25 +71,35 @@ client.username_pw_set(ACCESS_TOKEN)
 # Connect to MQTT broker using mqttLocalHost and port and 60 seconds keepalive interval
 client.connect(mqtt_config['mqttLocalHost'], mqtt_config['mqttLocalPort'], 60)
 
+temp = 0
+humi = 0
 client.loop_start()
 
 try:
     while True:
-        temp,humi = sht.read_values()
+        try:
+            temp,humi = sht.read_values()
+        except Exception as ex:
+            print("exception: {0}".format(ex))
         co2 = read_channel(CO2_CHANNEL)
         wLev = read_channel(WATER_LEVEL_CHANNEL)
         sHumi = read_channel(SOIL_HUMIDIFY_CHANNEL)
         light = read_channel(LIGHT_CHANNEL)
         #print(u"Temperature: {:g}\u00b0C, Humidity: {:g}%".format(temp, humi))
 
+        c_co2 = sensor_table.convert_co2(co2)
+        c_wLev = sensor_table.convert_co2(wLev)
+        c_sHumi = sensor_table.convert_co2(sHumi)
+        c_light = sensor_table.convert_co2(light)
+ 
         sensor_data = {
           "tm" : int(time.time()),
           "temp" : {"unit": "C", "val": temp},
           "humi" : {"unit": "%", "val": humi},
-          "co2" : {"unit": "u10", "val": co2},
-          "wLev" : {"unit": "u10", "val": wLev},
-          "sHumi" : {"unit": "u10", "val": sHumi},
-          "light" : {"unit": "u10", "val": light},
+          "co2" : {"unit": "u10", "val": c_co2},
+          "wLev" : {"unit": "u10", "val": c_wLev},
+          "sHumi" : {"unit": "u10", "val": c_sHumi},
+          "light" : {"unit": "u10", "val": c_light},
         }
 
         data_in_json_format = json.dumps(sensor_data)
