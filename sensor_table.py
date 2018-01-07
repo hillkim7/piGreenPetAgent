@@ -62,7 +62,9 @@ def convert_co2(raw_val):
     return raw_val * 2
 
 def convert_cds(raw_val):
-    return (1023 - raw_val) / 3
+    val = (1023 - raw_val) / 3
+    val = val - 100
+    return val
 
 soil_humi_matrix = [
     [400, 700, 0, 10],
