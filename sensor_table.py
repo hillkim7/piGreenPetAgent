@@ -55,8 +55,17 @@ water_level_matrix = [
     ]
 water_level_table = ConvertTable(water_level_matrix)
 
+
+def truncate(f, n):
+    '''Truncates/pads a float f to n decimal places without rounding'''
+    s = '%.12f' % f
+    i, p, d = s.partition('.')
+    val = '.'.join([i, (d+'0'*n)[:n]])
+    return float(val)
+
 def convert_water_level(raw_val):
-    return water_level_table.convert(raw_val)
+    val = water_level_table.convert(raw_val)
+    return truncate(val, 2)
 
 def convert_co2(raw_val):
     return raw_val * 2
@@ -64,7 +73,7 @@ def convert_co2(raw_val):
 def convert_cds(raw_val):
     val = (1023 - raw_val) / 3
     val = val - 100
-    return val
+    return truncate(val, 2)
 
 soil_humi_matrix = [
     [400, 700, 0, 10],
@@ -72,13 +81,12 @@ soil_humi_matrix = [
     [900, 1023, 90, 100],
     ]
 soil_humi_table = ConvertTable(soil_humi_matrix)
-
-
+    
 def convert_soil_humi(raw_val):
     raw_val = 1023 - raw_val
-    cval = soil_humi_table.convert(raw_val)
+    val = soil_humi_table.convert(raw_val)
     #print("%d->%d" % (raw_val, cval))
-    return cval
+    return truncate(val, 2)
 
 class TestCoverter(unittest.TestCase):
     def __init__(self, *args, **kwargs):

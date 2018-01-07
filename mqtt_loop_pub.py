@@ -88,18 +88,18 @@ try:
         #print(u"Temperature: {:g}\u00b0C, Humidity: {:g}%".format(temp, humi))
 
         c_co2 = sensor_table.convert_co2(co2)
-        c_wLev = sensor_table.convert_co2(wLev)
-        c_sHumi = sensor_table.convert_co2(sHumi)
-        c_light = sensor_table.convert_co2(light)
+        c_wLev = sensor_table.convert_water_level(wLev)
+        c_sHumi = sensor_table.convert_soil_humi(sHumi)
+        c_light = sensor_table.convert_cds(light)
  
         sensor_data = {
           "tm" : int(time.time()),
           "temp" : {"unit": "C", "val": temp},
           "humi" : {"unit": "%", "val": humi},
-          "co2" : {"unit": "u10", "val": c_co2},
-          "wLev" : {"unit": "u10", "val": c_wLev},
-          "sHumi" : {"unit": "u10", "val": c_sHumi},
-          "light" : {"unit": "u10", "val": c_light},
+          "co2" : {"unit": "ppm", "val": c_co2},
+          "wLev" : {"unit": "mm", "val": c_wLev},
+          "sHumi" : {"unit": "%", "val": c_sHumi},
+          "light" : {"unit": "lux", "val": c_light},
         }
 
         data_in_json_format = json.dumps(sensor_data)
