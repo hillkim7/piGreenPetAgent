@@ -16,11 +16,18 @@ from petscript.outputprocessor import OutputProcessor
 from petscript.petscript import Scenario
 import queue
 from datetime import datetime
+import RPi.GPIO as GPIO
 
+# kind of sensor values
 WATER_LEVEL_CHANNEL=0
 SOIL_HUMIDIFY_CHANNEL=1
 CO2_CHANNEL=2
 LIGHT_CHANNEL=3
+
+# kind of request message
+MSG_CHAT=0
+MSG_CTRL=1
+MSG_PARA=2
 
 def generate_topic(service_code, product_sn):
     topic = 'petG1/' + service_code + '/' + product_sn + '/stat/_cur'
@@ -28,6 +35,11 @@ def generate_topic(service_code, product_sn):
 
 def generate_chat_topic(service_code, product_sn):
     topic = 'petG1/' + service_code + '/' + product_sn + '/chat/_cur'
+    return topic
+
+# make topic for remote call 
+def generate_rcall_filter(service_code, product_sn):
+    topic = 'petG1/' + service_code + '/' + product_sn + '/rcall/#'
     return topic
 
 def generate_client_id(client_prefix, product_sn):
@@ -52,6 +64,9 @@ spi = spidev.SpiDev()
 spi.open(0, 0)
 # It must set the speed as 1 M to talk with MCP3008.
 spi.max_speed_hz = 1000000
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
 
 def read_channel(channel):
     cmd = 0b11 << 6  # Start bit, single channel read
@@ -90,7 +105,7 @@ next_reading = time.time()
 script_file = 'files/pet-scenario.csv'
 bot_name = 'Green Pet'
 bot_user = product_sn
-ipcQueue = queue.Queue()
+ipc_queue = queue.Queue()
 
 scenario = Scenario()
 input_processor = InputProcessor()
@@ -99,39 +114,86 @@ scenario.load_scenario_file(script_file)
 petbot = PetBot(bot_name, scenario, input_processor, output_processor)
 print('Greeting', petbot.talk('안녕'))
 
+def handle_mqtt_msg(msg):
+    global ipc_queue, bot_user
+    parsed_topic = msg.topic.split('/')
+    payload = msg.payload.decode('utf-8')
+    data = json.loads(payload)
+    if parsed_topic[3] == 'chat':
+        if 'user' not in data or data['user'] != bot_user:
+            # 자신이 보낸 메시지는 처리하지 않도록 함
+            print("text: " + data['text'])
+            if data['text']:
+                ipc_queue.put((MSG_CHAT, data))
+    elif parsed_topic[3] == 'rcall':
+        if parsed_topic[4] == '_ctrl':
+            ipc_queue.put((MSG_CTRL, data))
+        elif parsed_topic[4] == '_para':
+            ipc_queue.put((MSG_PARA, data))
+        else:
+            print("unknown topic: {}".format(msg.topic))
+    else:
+        print("unknown topic: {}".format(msg.topic))
+
 def on_message(mqttc, obj, msg):
-    global ipcQueue, bot_user
+    """ topic example>
+    - chat topic: petG1/1/1001/chat/_cur
+    - control topic: petG1/1/1001/rcall/_ctrl/123456
+    - set topic: petG1/1/1001/rcall/_para/123456
+    """
     #print("on message: " + msg.topic+" "+str(msg.qos)+" payload: "+str(msg.payload))
     #print("msg.payload --> type:{} text: {} len: {}".format(type(msg.payload), msg.payload, len(msg.payload)))
-    payload = msg.payload.decode('utf-8')
     try:
-        data = json.loads(payload)
-        if 'user' not in data or data['user'] != bot_user:
-            print("text: " + data['text'])
-            ipcQueue.put(data)
-    except ValueError:
-        print("no json text: " + payload)
+        handle_mqtt_msg(msg)
+    except ValueError as e:
+        print("no json text: {}".format(msg))
+    except:
+        print("Unexpected error: {}".format(sys.exc_info()[0]))
 
-def check_chat():
+def process_chat(data):
+    print('chat data: ', data)
+    answer = petbot.talk(data['text'])
+    msg = {}
+    msg['tm'] = int(time.time())
+    if answer:
+        print(answer)
+        msg['text'] = answer.text
+        msg['emotion'] = answer.emotion
+    else:
+        msg['text'] = ('^^')
+    msg['user'] = bot_user
+    json_msg = json.dumps(msg)
+    print("publish: {:s} {:s}".format(chat_topic, json_msg))
+    client.publish(chat_topic, json_msg, 1)
+
+def process_ctrl(data):
+    print('ctrl data: ', data)
+    if data['func'] == 'onOff':
+        # device 번호에 명시된 GPIO 포트를 On 또는 Off함
+        num = int(data['dev'])
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(num, GPIO.OUT)
+        if int(data['val']):
+            print("GPIO {} High".format(num))
+            GPIO.output(num, GPIO.HIGH)
+        else:
+            print("GPIO {} Low".format(num))
+            GPIO.output(num, GPIO.LOW)
+    else:
+        print("unknown 'func': {}".format(data['func']))
+
+def check_queue_data():
     try:
-        data = ipcQueue.get(True, 0.2)
+        item = ipc_queue.get(True, 0.2)
     except queue.Empty:
         return
-    if data:
-        print('data from Q: ', data)
-        answer = petbot.talk(data['text'])
-        msg = {}
-        msg['tm'] = int(time.time())
-        if answer:
-            print(answer)
-            msg['text'] = answer.text
-            msg['emotion'] = answer.emotion
-        else:
-            msg['text'] = ('^^')
-        msg['user'] = bot_user
-        json_msg = json.dumps(msg)
-        print("publish: {:s} {:s}".format(chat_topic, json_msg))
-        client.publish(chat_topic, json_msg, 1)
+    try:
+        if item[0] == MSG_CHAT:
+            process_chat(item[1])
+        elif item[0] == MSG_CTRL:
+            process_ctrl(item[1])
+    except:
+        print("error: {}".format(sys.exc_info()))
 
 print("MQTT client_id={} with interval={}".format(client_id, INTERVAL))
 client = mqtt.Client(client_id)
@@ -147,7 +209,12 @@ client.connect(mqtt_config['mqttLocalHost'], mqtt_config['mqttLocalPort'], 60)
 temp = 0
 humi = 0
 client.loop_start()
-client.subscribe(chat_topic, 0)
+
+topics = []
+topics.append((chat_topic, 0))
+topics.append((generate_rcall_filter(mqtt_config['serviceCode'], product_sn), 0))
+print("subscribe {}".format(topics))
+client.subscribe(topics, 0)
 
 try:
     while True:
@@ -192,7 +259,7 @@ try:
         while sleep_time > 0:
             output_processor.set_tag_value('{{tm}}', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             #time.sleep(0.1)
-            check_chat()
+            check_queue_data()
             sleep_time = next_reading-time.time()
             #print('check')
 except KeyboardInterrupt:

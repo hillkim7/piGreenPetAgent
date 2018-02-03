@@ -58,13 +58,14 @@ water_level_table = ConvertTable(water_level_matrix)
 
 def truncate(f, n):
     '''Truncates/pads a float f to n decimal places without rounding'''
-    s = '%.12f' % f
+    s = '%d' % f
     i, p, d = s.partition('.')
     val = '.'.join([i, (d+'0'*n)[:n]])
     return float(val)
 
 def convert_water_level(raw_val):
     val = water_level_table.convert(raw_val)
+    val = val * 2
     return truncate(val, 2)
 
 def convert_co2(raw_val):
