@@ -65,8 +65,12 @@ def generate_client_id(client_prefix, product_sn):
     return client_id
 
 def load_json_file(path):
-    with open(path) as data_file:    
+    with open(path) as data_file:
         return json.load(data_file)
+
+def save_json_file(path, data):
+    with open(path, 'w') as data_file:
+        return json.dump(data, data_file, indent=2)
 
 class TagMapper(OutputProcessor):
     
@@ -187,20 +191,16 @@ def process_chat(data):
     client.publish(chat_topic, json_msg, 1)
 
 def process_ctrl(data):
+    global param_config
     print('ctrl data: ', data)
-    if data['func'] == 'onOff':
-        # device 번호에 명시된 GPIO 포트를 On 또는 Off함
-        num = int(data['dev'])
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(num, GPIO.OUT)
-        if int(data['val']):
-            print("GPIO {} High".format(num))
-            GPIO.output(num, GPIO.HIGH)
-        else:
-            print("GPIO {} Low".format(num))
-            GPIO.output(num, GPIO.LOW)
-    else:
-        print("unknown 'func': {}".format(data['func']))
+    param_config = data
+ 
+def process_param(data):
+    global pet_config, param_config
+    param_file = pet_config['paramConfigFile']
+    print('param data: ', data)
+    param_config = data
+    save_json_file(param_file, param_config)
 
 def check_queue_data():
     try:
@@ -212,6 +212,8 @@ def check_queue_data():
             process_chat(item[1])
         elif item[0] == MSG_CTRL:
             process_ctrl(item[1])
+        elif item[0] == MSG_PARA:
+            process_param(item[1])
     except:
         print("error: {}".format(sys.exc_info()))
 
