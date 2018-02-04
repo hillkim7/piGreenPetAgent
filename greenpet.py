@@ -55,7 +55,7 @@ def generate_alarm_topic(service_code, product_sn, alarm_type):
     topic = 'petG1/' + service_code + '/' + product_sn + '/alarm/' + alarm_type
     return topic
 
-# make topic for remote call 
+# make topic for remote call
 def generate_rcall_filter(service_code, product_sn):
     topic = 'petG1/' + service_code + '/' + product_sn + '/rcall/#'
     return topic
@@ -73,10 +73,10 @@ def save_json_file(path, data):
         return json.dump(data, data_file, indent=2)
 
 class TagMapper(OutputProcessor):
-    
+
     def __init__(self):
         self.mapper = {}
-    
+
     def post_process(self, output_line):
         for key, val in self.mapper.items():
             if key in output_line:
@@ -124,7 +124,7 @@ sht = sht1x_sensor.SHT1xSensor()
 
 ACCESS_TOKEN = 'IOT_DEMO_TOKEN'
 
-next_reading = time.time() 
+next_reading = time.time()
 
 script_file = 'files/pet-scenario.csv'
 bot_name = 'Green Pet'
@@ -205,7 +205,7 @@ def process_ctrl(data):
             GPIO.output(num, GPIO.LOW)
     else:
         print("unknown 'func': {}".format(data['func']))
- 
+
 def process_param(data):
     global pet_config, param_config
     param_file = pet_config['paramConfigFile']
@@ -331,14 +331,14 @@ try:
         c_wLev = sensor_table.convert_water_level(wLev)
         c_sHumi = sensor_table.convert_soil_humi(sHumi)
         c_light = sensor_table.convert_cds(light)
- 
+
         output_processor.set_tag_value('{{temp}}', temp)
         output_processor.set_tag_value('{{humi}}', humi)
         output_processor.set_tag_value('{{co2}}', c_co2)
         output_processor.set_tag_value('{{wLev}}', c_wLev)
         output_processor.set_tag_value('{{sHumi}}', c_sHumi)
         output_processor.set_tag_value('{{light}}', c_light)
-        
+
         sensor_data = {
           "tm" : int(time.time()),
           "temp" : {"unit": "C", "val": temp},
