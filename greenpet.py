@@ -29,12 +29,30 @@ MSG_CHAT=0
 MSG_CTRL=1
 MSG_PARA=2
 
+# alarm type
+TYPE_HUMI = 'humi'    # 습도
+TYPE_TEMP = 'temp'    # 온도
+TYPE_CO2 = 'co2'      # CO2
+TYPE_WLEV = 'wLev'    # 수위(water level)
+TYPE_SHUMI = 'sHumi'  # 지습(soil humidity)
+TYPE_LIGHT = 'light'  # 조도
+
+# alarm code
+ALARM_OK = 0          # 정상
+ALARM_LOW = 1         # 센서 하한값 미달
+ALARM_HIGH = 2        # 센서 상한값 초과
+ALARM_EVENT = 3       # 이벤트 발생
+
 def generate_topic(service_code, product_sn):
     topic = 'petG1/' + service_code + '/' + product_sn + '/stat/_cur'
     return topic
 
 def generate_chat_topic(service_code, product_sn):
     topic = 'petG1/' + service_code + '/' + product_sn + '/chat/_cur'
+    return topic
+
+def generate_alarm_topic(service_code, product_sn, alarm_type):
+    topic = 'petG1/' + service_code + '/' + product_sn + '/alarm/' + alarm_type
     return topic
 
 # make topic for remote call 
@@ -90,7 +108,7 @@ mqtt_config = load_json_file(pet_config['mqttConfigFile'])
 param_config = load_json_file(pet_config['paramConfigFile'])
 script_file = pet_config['scenarioFile']
 product_sn = pet_config['sn']
-reportInterval = pet_config['reportInterval']
+report_interval = pet_config['reportInterval']
 
 print('paramConfigFile: {}'.format(json.dumps(param_config, indent=2)))
 
@@ -197,7 +215,68 @@ def check_queue_data():
     except:
         print("error: {}".format(sys.exc_info()))
 
-print("MQTT client_id={} with interval={}".format(client_id, reportInterval))
+alarm_table = {}
+
+def publish_alarm(alarm_type, payload):
+    global client, mqtt_config, product_sn
+    alarm_topic = generate_alarm_topic(mqtt_config['serviceCode'], product_sn, alarm_type)
+    print("publish: {} {}%".format(alarm_topic, payload))
+    client.publish(alarm_topic, payload, retain=True)
+
+def check_sensor_value(alarm_type, sensor_value):
+    """알람 범위에 벗어 났을때 알람 객체를 반환한다.
+    {
+      "tm" : 1510475347,
+      "code" : 1,
+      "min" : 5,
+      "max" : 45,
+      "val" : 15
+    }
+    """
+    global alarm_table, param_config
+    alarm_obj = {}
+    alarm_obj['tm'] = int(time.time())
+    param_item = param_config[alarm_type]
+    print("alarm_type={} param_item={}".format(alarm_type, param_item))
+    if sensor_value < param_item['min']:
+        alarm_obj['min'] = param_item['min']
+        alarm_obj['val'] = sensor_value
+        alarm_obj['max'] = param_item['max']
+        alarm_obj['code'] = ALARM_LOW
+        if alarm_type not in alarm_table or alarm_table[alarm_type] != ALARM_LOW:
+            alarm_table[alarm_type] = ALARM_LOW
+            return alarm_obj
+    elif sensor_value > param_item['max']:
+        alarm_obj['min'] = param_item['min']
+        alarm_obj['val'] = sensor_value
+        alarm_obj['max'] = param_item['max']
+        alarm_obj['code'] = ALARM_HIGH
+        if alarm_type not in alarm_table or alarm_table[alarm_type] != ALARM_HIGH:
+            alarm_table[alarm_type] = ALARM_HIGH
+            return alarm_obj
+    elif alarm_type in alarm_table:
+        # 발생됐다 정상 복구된 경우
+        alarm_obj['code'] = ALARM_OK
+        alarm_table.pop(alarm_type) ## remove key
+        return alarm_obj
+
+def check_alarm(alarm_type, sensor_value):
+    alarm_item = check_sensor_value(alarm_type, sensor_value)
+    if alarm_item:
+        if alarm_item['code'] == ALARM_OK:
+            publish_alarm(alarm_type, None)
+        else:
+            publish_alarm(alarm_type, json.dumps(alarm_item))
+
+def check_alarm_events(sensor_data):
+    check_alarm(TYPE_HUMI, sensor_data[TYPE_HUMI]['val'])
+    check_alarm(TYPE_TEMP, sensor_data[TYPE_TEMP]['val'])
+    check_alarm(TYPE_CO2, sensor_data[TYPE_CO2]['val'])
+    check_alarm(TYPE_WLEV, sensor_data[TYPE_WLEV]['val'])
+    check_alarm(TYPE_SHUMI, sensor_data[TYPE_SHUMI]['val'])
+    check_alarm(TYPE_LIGHT, sensor_data[TYPE_LIGHT]['val'])
+
+print("MQTT client_id={} with interval={}".format(client_id, report_interval))
 client = mqtt.Client(client_id)
 
 client.on_message = on_message
@@ -205,6 +284,7 @@ client.on_message = on_message
 # Set access token
 client.username_pw_set(ACCESS_TOKEN)
 
+print("MQTT mqttLocalHost={} mqttLocalPort={}".format(mqtt_config['mqttLocalHost'], mqtt_config['mqttLocalPort']))
 # Connect to MQTT broker using mqttLocalHost and port and 60 seconds keepalive interval
 client.connect(mqtt_config['mqttLocalHost'], mqtt_config['mqttLocalPort'], 60)
 
@@ -251,12 +331,11 @@ try:
           "sHumi" : {"unit": "%", "val": c_sHumi},
           "light" : {"unit": "lux", "val": c_light},
         }
-
         data_in_json_format = json.dumps(sensor_data)
         print("publish: {:s} {:s}%".format(topic, data_in_json_format))
         client.publish(topic, data_in_json_format, 1)
-
-        next_reading += reportInterval
+        check_alarm_events(sensor_data)
+        next_reading += report_interval
         sleep_time = next_reading-time.time()
         while sleep_time > 0:
             output_processor.set_tag_value('{{tm}}', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
