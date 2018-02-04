@@ -46,6 +46,10 @@ def generate_client_id(client_prefix, product_sn):
     client_id = client_prefix + 'GPET' + product_sn + '_' + str(random.randint(100, 999))
     return client_id
 
+def load_json_file(path):
+    with open(path) as data_file:    
+        return json.load(data_file)
+
 class TagMapper(OutputProcessor):
     
     def __init__(self):
@@ -77,20 +81,18 @@ def read_channel(channel):
     result |= (resp[2] & 0x80) >> 7
     return result & 0x3FF
 
-# Data capture and upload interval in seconds.
-INTERVAL=3
-
-if len(sys.argv) < 3:
-    print(sys.argv[0], "product_sn mqttConfig.json [interval]")
+if len(sys.argv) != 2:
+    print(sys.argv[0], "petConfig.json")
     sys.exit(0)
 
-product_sn = sys.argv[1]
-config_path = sys.argv[2]
-if len(sys.argv) == 4:
-    INTERVAL = int(sys.argv[3])
+pet_config = load_json_file(sys.argv[1])
+mqtt_config = load_json_file(pet_config['mqttConfigFile'])
+param_config = load_json_file(pet_config['paramConfigFile'])
+script_file = pet_config['scenarioFile']
+product_sn = pet_config['sn']
+reportInterval = pet_config['reportInterval']
 
-with open(config_path) as data_file:    
-    mqtt_config = json.load(data_file)
+print('paramConfigFile: {}'.format(json.dumps(param_config, indent=2)))
 
 topic = generate_topic(mqtt_config['serviceCode'], product_sn)
 chat_topic = generate_chat_topic(mqtt_config['serviceCode'], product_sn)
@@ -195,7 +197,7 @@ def check_queue_data():
     except:
         print("error: {}".format(sys.exc_info()))
 
-print("MQTT client_id={} with interval={}".format(client_id, INTERVAL))
+print("MQTT client_id={} with interval={}".format(client_id, reportInterval))
 client = mqtt.Client(client_id)
 
 client.on_message = on_message
@@ -254,7 +256,7 @@ try:
         print("publish: {:s} {:s}%".format(topic, data_in_json_format))
         client.publish(topic, data_in_json_format, 1)
 
-        next_reading += INTERVAL
+        next_reading += reportInterval
         sleep_time = next_reading-time.time()
         while sleep_time > 0:
             output_processor.set_tag_value('{{tm}}', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))

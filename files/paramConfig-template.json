@@ -1,0 +1,30 @@
+{
+  "autoWater": {
+    "min": 15,
+    "use": 1
+  },
+  "co2": {
+    "max": 5000,
+    "min": 100
+  },
+  "humi": {
+    "max": 80,
+    "min": 5
+  },
+  "light": {
+    "max": 1000,
+    "min": 0
+  },
+  "sHumi": {
+    "max": 50,
+    "min": 5
+  },
+  "temp": {
+    "max": 30,
+    "min": 5
+  },
+  "wLev": {
+    "max": 500,
+    "min": 10
+  }
+}

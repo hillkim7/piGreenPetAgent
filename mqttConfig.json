@@ -1,7 +1,7 @@
 {
   "mqttHost": "",
   "mqttPort": 19001,
-  "mqttLocalHost": "127.0.0.1",
+  "mqttLocalHost": "192.168.219.250",
   "mqttLocalPort": 1883,
   "clientPrefix": "PBoT-",
   "TLS": 0,

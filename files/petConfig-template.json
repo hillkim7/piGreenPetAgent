@@ -1,0 +1,7 @@
+{
+  "sn": "1000",
+  "reportInterval": 5,
+  "mqttConfigFile": "mqttConfig.json",
+  "paramConfigFile": "paramConfig.json",
+  "scenarioFile": "files/pet-scenario.csv"
+}
