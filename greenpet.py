@@ -191,9 +191,20 @@ def process_chat(data):
     client.publish(chat_topic, json_msg, 1)
 
 def process_ctrl(data):
-    global param_config
     print('ctrl data: ', data)
-    param_config = data
+    if data['func'] == 'onOff':
+        # device 번호에 명시된 GPIO 포트를 On 또는 Off함
+        num = int(data['dev'])
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(num, GPIO.OUT)
+        if int(data['val']):
+            print("GPIO {} High".format(num))
+            GPIO.output(num, GPIO.HIGH)
+        else:
+            print("GPIO {} Low".format(num))
+            GPIO.output(num, GPIO.LOW)
+    else:
+        print("unknown 'func': {}".format(data['func']))
  
 def process_param(data):
     global pet_config, param_config
@@ -238,6 +249,7 @@ def check_sensor_value(alarm_type, sensor_value):
     global alarm_table, param_config
     alarm_obj = {}
     alarm_obj['tm'] = int(time.time())
+    print("alarm_type={} param_config={}".format(alarm_type, param_config))
     param_item = param_config[alarm_type]
     print("alarm_type={} param_item={}".format(alarm_type, param_item))
     if sensor_value < param_item['min']:
@@ -271,12 +283,15 @@ def check_alarm(alarm_type, sensor_value):
             publish_alarm(alarm_type, json.dumps(alarm_item))
 
 def check_alarm_events(sensor_data):
-    check_alarm(TYPE_HUMI, sensor_data[TYPE_HUMI]['val'])
-    check_alarm(TYPE_TEMP, sensor_data[TYPE_TEMP]['val'])
-    check_alarm(TYPE_CO2, sensor_data[TYPE_CO2]['val'])
-    check_alarm(TYPE_WLEV, sensor_data[TYPE_WLEV]['val'])
-    check_alarm(TYPE_SHUMI, sensor_data[TYPE_SHUMI]['val'])
-    check_alarm(TYPE_LIGHT, sensor_data[TYPE_LIGHT]['val'])
+    try:
+        check_alarm(TYPE_HUMI, sensor_data[TYPE_HUMI]['val'])
+        check_alarm(TYPE_TEMP, sensor_data[TYPE_TEMP]['val'])
+        check_alarm(TYPE_CO2, sensor_data[TYPE_CO2]['val'])
+        check_alarm(TYPE_WLEV, sensor_data[TYPE_WLEV]['val'])
+        check_alarm(TYPE_SHUMI, sensor_data[TYPE_SHUMI]['val'])
+        check_alarm(TYPE_LIGHT, sensor_data[TYPE_LIGHT]['val'])
+    except:
+        print("error: {}".format(sys.exc_info()))
 
 print("MQTT client_id={} with interval={}".format(client_id, report_interval))
 client = mqtt.Client(client_id)
